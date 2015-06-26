@@ -18,15 +18,14 @@ component {
     this.SLEEP_UNIT = 100;
 
     variables.thread = createObject( "java", "java.lang.Thread" );
-    variables.task = 0;
     variables.status = "NULL"; // or READY, RUNNING, DONE, FAILED, CANCELLED
-    variables.exception = 0;
 
     // task is first argument, additional args can be provided
     // task can be a function/closure or a CFC/struct with a call() method
     // tasks that are CFCs/structs with a stop() method are cancellable
     public any function init( required any task ) {
         variables.task = task;
+        structDelete( variables, "result" );
         if ( structKeyExists( arguments, 1 ) ) {
             // positional arguments, copy and delete 1st one
             variables.args = [ ];
@@ -52,7 +51,7 @@ component {
                 autorun = task.autorun();
             }
         }
-        resetTask();
+        variables.status = "READY";
         if ( autorun ) run();
         return this;
     }
@@ -86,16 +85,16 @@ component {
         return canceled;
     }
 
-    public any function get( boolean reset = false ) {
+    public any function get() {
         while ( !isDone() ) {
             waitFor( this.SLEEP_UNIT );
         }
-        return getResult( reset );
+        return getResult();
     }
 
-    public any function getWithTimeout( required numeric timeout, boolean reset = false ) {
+    public any function getWithTimeout( required numeric timeout ) {
         waitForResult( timeout );
-        if ( isDone() ) return getResult( reset );
+        if ( isDone() ) return getResult();
         throw(
             type = "AVOWAL.FUTURE.TIMEOUTEXCEPTION",
             message = "The computation did not complete within #timeout#ms."
@@ -135,8 +134,10 @@ component {
                 args = args
             };
             variables.status = "RUNNING";
-            thread name="AvowalThread#tid#" tid="#tid#" {
-                var f = request._avowal_Q[ attributes.tid ];
+            var threadName = variables.thread.currentThread().getThreadGroup().getName();
+            writeOutput("run() called in #threadName#<br />");
+            if ( threadName == "cfthread" || threadName == "scheduler" ) {
+                var f = request._avowal_Q[ tid ];
                 try {
                     if ( isStruct( f.task ) &&
                          structKeyExists( f.task, "call" ) ) {
@@ -155,6 +156,28 @@ component {
                     variables.exception = e;
                     terminate( "FAILED" );
                 }
+            } else {
+                thread name="AvowalThread#tid#" tid="#tid#" {
+                    var f = request._avowal_Q[ attributes.tid ];
+                    try {
+                        if ( isStruct( f.task ) &&
+                             structKeyExists( f.task, "call" ) ) {
+                            variables.result = f.task.call( argumentCollection = f.args );
+                        } else if ( isCustomFunction( f.task ) ||
+                                    isClosure( f.task ) ) {
+                            variables.result = f.task( argumentCollection = f.args );
+                        } else {
+                            throw(
+                                type = "AVOWAL.FUTURE.UNCALLABLE",
+                                message = "The computation is not callable."
+                            );
+                        }
+                        terminate( "DONE" );
+                    } catch ( any e ) {
+                        variables.exception = e;
+                        terminate( "FAILED" );
+                    }
+                }
             }
         }
         return this;
@@ -170,16 +193,13 @@ component {
         return this;
     }
 
-    private any function getResult( required boolean reset ) {
+    private any function getResult() {
         switch ( variables.status ) {
         case "DONE":
             if ( structKeyExists( variables, "result" ) &&
                  !isNull( variables.result ) ) {
-                var result = variables.result;
-                if ( reset ) resetTask();
-                return result;
+                return variables.result;
             } else {
-                if ( reset ) resetTask();
                 return; // return null
             }
             break;
@@ -227,11 +247,6 @@ component {
             return;
         }
         waitFor( hops );
-    }
-
-    private void function resetTask() {
-        structDelete( variables, "result" );
-        variables.status = "READY";
     }
 
 }

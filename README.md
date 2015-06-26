@@ -9,7 +9,9 @@ The basic intent behind this library is to provide a simple, fluid interface for
 
 You can create a `future` and pass it either a function / closure to be executed in another thread, or you can pass a CFC instance that has at least a `call()` method to be executed in another thread.
 
-    var f = new avowal.future( function() { var v = someLongProcess(); return computeResult( v ); } );
+    var f = new avowal.future( function() {
+        var v = someLongProcess(); return computeResult( v );
+    } );
     // continue on with other work
     ...
     // pick up the value
@@ -58,3 +60,9 @@ By default, the task starts immediately when the future is created. If you pass 
     f.run();
 
 _More details coming soon._
+
+# License
+
+Copyright (c) 2015 Sean Corfield
+
+Distributed under the Apache Software License 2.0.
