@@ -135,7 +135,6 @@ component {
             };
             variables.status = "RUNNING";
             var threadName = variables.thread.currentThread().getThreadGroup().getName();
-            writeOutput("run() called in #threadName#<br />");
             if ( threadName == "cfthread" || threadName == "scheduler" ) {
                 var f = request._avowal_Q[ tid ];
                 try {
